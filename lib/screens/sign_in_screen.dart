@@ -1,78 +1,117 @@
+import 'dart:convert';
+
+import 'package:api_task_app/screens/subscribers_screen.dart';
 import 'package:flutter/material.dart';
 import 'package:google_sign_in/google_sign_in.dart';
-import 'subscribers_screen.dart';
-import '../services/google_sign_in_service.dart';
+import 'package:http/http.dart' as http;
 
-class LoginScreen extends StatefulWidget {
+
+class SignInScreen extends StatefulWidget {
   @override
-  _LoginScreenState createState() => _LoginScreenState();
+  State<SignInScreen> createState() => _SignInScreenState();
 }
 
-class _LoginScreenState extends State<LoginScreen> {
-  final GoogleSignIn _googleSignIn = GoogleSignIn();
+class _SignInScreenState extends State<SignInScreen> {
+  bool _isLoading = false;
+  List<dynamic> _subscriptions = [];
+
+  @override
+  void initState() {
+    super.initState();
+    // Initial call to sign in and fetch subscriptions
+    // Can be removed if you want to start the process on button click only
+    // signInAndFetchSubscriptions();
+  }
+
+  final GoogleSignIn _googleSignIn = GoogleSignIn(
+    scopes: ['https://www.googleapis.com/auth/youtube.readonly'],
+  );
+
+  Future<void> signInAndFetchSubscriptions() async {
+    setState(() {
+      _isLoading = true;
+    });
+    try {
+      final GoogleSignInAccount? account = await _googleSignIn.signIn();
+      final GoogleSignInAuthentication? googleAuth =
+          await account?.authentication;
+      final accessToken = googleAuth?.accessToken;
+
+      if (accessToken != null) {
+        String? nextPageToken = '';
+        List<dynamic> allSubscriptions = [];
+
+        // Loop to handle pagination
+        do {
+          final response = await http.get(
+            Uri.parse(
+              'https://www.googleapis.com/youtube/v3/subscriptions?part=snippet&mine=true&pageToken=$nextPageToken&maxResults=50',
+            ),
+            headers: {'Authorization': 'Bearer $accessToken'},
+          );
+
+          if (response.statusCode == 200) {
+            final data = json.decode(response.body);
+            allSubscriptions.addAll(data['items']);
+            nextPageToken = data['nextPageToken'];
+          } else {
+            print('Failed to fetch subscriptions: ${response.statusCode}');
+            print('Response body: ${response.body}');
+            nextPageToken = null; // Stop the loop on error
+          }
+        } while (nextPageToken != null);
+
+        setState(() {
+          _subscriptions = allSubscriptions;
+          _isLoading = false;
+
+          // Navigate to SubscriptionListScreen with the fetched data
+          Navigator.push(
+            context,
+            MaterialPageRoute(
+              builder: (context) =>
+                  SubscriptionListScreen(subscriptions: _subscriptions),
+            ),
+          );
+        });
+      }
+    } catch (error) {
+      setState(() {
+        _isLoading = false;
+      });
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Error: $error')),
+      );
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      body: Container(
-        decoration: BoxDecoration(
-          gradient: LinearGradient(
-            colors: [Colors.blueAccent, Colors.lightBlue],
-            begin: Alignment.topCenter,
-            end: Alignment.bottomCenter,
-          ),
-        ),
-        child: Center(
-          child: Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 24.0),
-            child: Column(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                // Add a logo or icon
-                Icon(
-                  Icons.account_circle,
-                  size: 100.0,
-                  color: Colors.white,
-                ),
-                SizedBox(height: 30.0),
-                Text(
-                  'Welcome to ApiTaskApp',
-                  style: TextStyle(
-                    fontSize: 24.0,
-                    fontWeight: FontWeight.bold,
-                    color: Colors.white,
+      backgroundColor: Colors.amber,
+      appBar: AppBar(
+        backgroundColor: Colors.amber,
+        title: Text('Login'),
+      ),
+      body: Center(
+        child: _isLoading
+            ? CircularProgressIndicator()
+            : ElevatedButton(
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: Colors.blue, // Button color
+                  foregroundColor: Colors.white, // Text color
+                  shadowColor: Colors.blueAccent,
+                  elevation: 5,
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(32.0),
                   ),
+                  minimumSize: Size(200, 50), // Set minimum size
                 ),
-                SizedBox(height: 20.0),
-                ElevatedButton(
-                  onPressed: () async {
-                    final user = await GoogleSignInService.signInWithGoogle();
-                    if (user != null) {
-                      // Navigate to Subscribers Screen
-                      Navigator.pushReplacement(
-                        context,
-                        MaterialPageRoute(builder: (context) => SubscribersScreen(user: user, accessToken: '',)),
-                      );
-                    }
-                  },
-                  style: ElevatedButton.styleFrom(
-                    padding: EdgeInsets.symmetric(horizontal: 50.0, vertical: 15.0),
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(30.0),
-                    ),
-                    // primary: Colors.white,
-                    // onPrimary: Colors.blue,
-                    textStyle: TextStyle(
-                      fontSize: 18.0,
-                      fontWeight: FontWeight.bold,
-                    ),
-                  ),
-                  child: Text('Sign in with Google'),
-                ),
-              ],
-            ),
-          ),
-        ),
+                child: Text('Sign in with Google'),
+                onPressed: () {
+                  signInAndFetchSubscriptions();
+                },
+              ),
       ),
     );
   }

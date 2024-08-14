@@ -1,7 +1,9 @@
+import 'dart:async';
+
 import 'package:api_task_app/screens/sign_in_screen.dart';
 import 'package:flutter/material.dart';
 import 'package:lottie/lottie.dart';
-import 'dart:async';
+
 
 class SplashScreen extends StatefulWidget {
   const SplashScreen({super.key});
@@ -17,7 +19,7 @@ class _SplashScreenState extends State<SplashScreen> {
     Timer(const Duration(seconds: 3), () {
       Navigator.of(context).pushReplacement(
         MaterialPageRoute(
-          builder: (context) => LoginScreen(),
+          builder: (context) => SignInScreen(),
         ),
       );
     });
@@ -48,7 +50,6 @@ class _SplashScreenState extends State<SplashScreen> {
               fit: BoxFit.cover,
             ),
             const SizedBox(height: 20),
-            
           ],
         ),
       ),
